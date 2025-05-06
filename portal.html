@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Three.js Portal for OBS</title>
+  <style>
+    body { margin: 0; overflow: hidden; }
+    canvas.webgl {
+      width: 100%;
+      height: 100%;
+      display: block;
+      background-color: #000000;
+    }
+  </style>
+</head>
+<body>
+  <canvas class="webgl"></canvas>
+  <script type="x-shader/x-vertex" id="vertexShader">
+    precision highp float;
+    varying vec2 vUv;
+    void main() {
+      vUv = uv;
+      vec4 modelViewPosition = modelViewMatrix * vec4(position, 1.0);
+      gl_Position = projectionMatrix * modelViewPosition;
+    }
+  </script>
+  <script type="x-shader/x-fragment" id="fragmentShader">
+    #define PI 3.1415
+    #define TAU 6.2832
+    uniform sampler2D map;
+    uniform sampler2D noiseMap;
+    uniform float time;
+    uniform float effectIntensity;
+    uniform float effectMultiplier;
+    varying vec2 vUv;
+
+    void main() {
+      vec2 vUv2 = vUv - .5;
+      float angle = atan(vUv2.y, vUv2.x);
+      float l = length(vUv2);
+      float l2 = pow(l, .5);
+
+      float u = angle * 2. / TAU + time * .1;
+      float v = fract(l + time * .2);
+      vec4 noise = texture2D(noiseMap, vec2(u, v));
+
+      float noiseDisp = noise.r * noise.g * 4. * effectMultiplier;
+      float radialMask = l;
+      float wavesCount = 5.0;
+      float wavesSpeed = time * 5.;
+      float pnt = sin(2.0 * l * PI * wavesCount + noiseDisp + wavesSpeed) * radialMask;
+
+      float dx = pnt * cos(angle);
+      float dy = pnt * sin(angle);
+
+      vec4 color = texture2D(map, vUv + vec2(dx, dy) * l * .3 * effectIntensity * effectMultiplier);
+      color *= 1. + pnt * .5 * effectIntensity;
+
+      float highlight = smoothstep(.0, .2, dx * dy);
+      color += highlight * effectIntensity * vec4(0.5, 0.7, 1.0, 1.0); // Blueish glow
+
+      float grey = dot(color.rgb, vec3(0.299, 0.587, 0.114));
+      color.rgb = mix(color.rgb, vec3(grey), effectIntensity * l * effectMultiplier);
+      color.r += smoothstep(.1, .7, l) * .5 * effectIntensity;
+
+      gl_FragColor = linearToOutputTexel(color);
+    }
+  </script>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
